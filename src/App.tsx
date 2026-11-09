@@ -1,387 +1,302 @@
-
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
-  Search,
-  SlidersHorizontal,
-  Clock,
+  BrowserRouter,
+  Routes,
+  Route,
+  Link,
+  useNavigate,
+  useLocation,
+} from "react-router-dom";
+import {
   ChefHat,
-  Sparkles,
-  Leaf,
-  ArrowRight,
+  Sun,
+  Moon,
+  User,
   Heart,
+  SlidersHorizontal,
+  LogOut,
+  ChevronDown,
 } from "lucide-react";
 import "./App.css";
-import { searchRecipes } from "./services/recipeApi";
-import type { SemanticSearchResult } from "./services/recipeApi";
+import "./styles/auth.css";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
 
-function getRecipeEmoji(cuisine?: string, mealType?: string): string {
-  const value = `${cuisine ?? ""} ${mealType ?? ""}`.toLowerCase();
+/* ── Pages ── */
+import HomePage from "./pages/HomePage";
+import FindRecipesPage from "./pages/FindRecipesPage";
+import SignInPage from "./pages/SignInPage";
+import SignUpPage from "./pages/SignUpPage";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
+import FavoritesPage from "./pages/FavoritesPage";
+import ProfilePage from "./pages/ProfilePage";
+import PreferencesPage from "./pages/PreferencesPage";
+import ProtectedRoute from "./components/ProtectedRoute";
 
-  if (value.includes("indian")) return "🍛";
-  if (value.includes("italian")) return "🍝";
-  if (value.includes("breakfast")) return "🥞";
-  if (value.includes("salad")) return "🥗";
-  if (value.includes("dessert")) return "🍰";
+/* ═══════════════════════════════════════════════
+   Shell — navbar + footer + theme toggle
+   ═══════════════════════════════════════════════ */
 
-  return "🍲";
-}
-
-function App() {
-  const [query, setQuery] = useState("");
-  const [submittedQuery, setSubmittedQuery] = useState("");
-  const [results, setResults] = useState<SemanticSearchResult[]>([]);
-  const [saved, setSaved] = useState<number[]>([]);
-  const [maxTime, setMaxTime] = useState("Any");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (!submittedQuery) {
-      setResults([]);
-      setLoading(false);
-      setError("");
-      return;
-    }
-
-    const controller = new AbortController();
-
-    async function loadRecipes() {
-      setLoading(true);
-      setError("");
-
-      try {
-        const data = await searchRecipes(submittedQuery, controller.signal);
-        setResults(data);
-      } catch (err) {
-        if (controller.signal.aborted) return;
-
-        setError(
-          err instanceof Error
-            ? err.message
-            : "Something went wrong while searching recipes."
-        );
-        setResults([]);
-      } finally {
-        if (!controller.signal.aborted) {
-          setLoading(false);
-        }
-      }
-    }
-
-    void loadRecipes();
-
-    return () => controller.abort();
-  }, [submittedQuery]);
-
-  const filteredRecipes = results.filter(({ recipe }) => {
-    const totalTime =
-      (recipe.prepTimeMinutes ?? 0) + (recipe.cookTimeMinutes ?? 0);
-
-    return maxTime === "Any" || totalTime <= Number(maxTime);
+function AppShell() {
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    const stored = localStorage.getItem("theme");
+    if (stored === "light" || stored === "dark") return stored;
+    return "dark"; // Default to dark forest green as signature identity
   });
 
-  function handleSearch(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("theme", theme);
+  }, [theme]);
 
-    const trimmedQuery = query.trim();
-    if (!trimmedQuery) {
-      setError("Enter an ingredient or describe what you want to eat.");
-      setSubmittedQuery("");
-      setResults([]);
-      return;
-    }
-
-    setSubmittedQuery(trimmedQuery);
-  }
-
-  function searchFor(term: string) {
-    setQuery(term);
-    setSubmittedQuery(term.trim());
-    setMaxTime("Any");
+  function toggleTheme() {
+    setTheme((prev) => (prev === "light" ? "dark" : "light"));
   }
 
   return (
     <div className="app">
-      <header className="navbar">
-        <a className="brand" href="/">
-          <span className="brand-icon">
-            <ChefHat size={23} />
-          </span>
-          <span>
-            recipe<span className="brand-highlight">mind</span>
-          </span>
-        </a>
-
-        <nav>
-          <a className="nav-active" href="#discover">Discover</a>
-          <a href="#discover">Find recipes</a>
-          <a href="#about">About</a>
-        </nav>
-
-        <div className="nav-badge">
-          <Sparkles size={15} />
-          AI-powered discovery
-        </div>
-      </header>
+      <Navbar theme={theme} toggleTheme={toggleTheme} />
 
       <main>
-        <section className="hero" id="discover">
-          <div className="hero-content">
-            <span className="eyebrow">
-              <Sparkles size={15} /> YOUR PERSONAL RECIPE DISCOVERY ENGINE
-            </span>
+        <Routes>
+          {/* Public Routes */}
+          <Route path="/" element={<HomePage />} />
+          <Route path="/find-recipes" element={<FindRecipesPage />} />
+          <Route path="/sign-in" element={<SignInPage />} />
+          <Route path="/sign-up" element={<SignUpPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
 
-            <h1>
-              Find your next
-              <br />
-              <span>favorite meal.</span>
-            </h1>
-
-            <p>
-              Search by ingredients, cravings, or a recipe you love.
-              Discover meals that match your taste.
-            </p>
-
-            <form className="search-box" onSubmit={handleSearch}>
-              <Search size={21} />
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Try “creamy pasta” or “paneer”..."
-                aria-label="Search recipes"
-              />
-              <button type="submit" disabled={loading}>
-                {loading ? "Searching..." : "Find recipes"}
-                <ArrowRight size={17} />
-              </button>
-            </form>
-
-            <div className="popular-searches">
-              <span>Popular:</span>
-              {["Pasta", "Indian", "Healthy", "Quick"].map((term) => (
-                <button key={term} onClick={() => searchFor(term)}>
-                  {term}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="hero-art" aria-label="Food illustration">
-            <div className="art-orbit orbit-one" />
-            <div className="art-orbit orbit-two" />
-            <div className="food-emoji">🥘</div>
-            <div className="floating-card floating-top">
-              <Sparkles size={16} />
-              <span>
-                <strong>Smart matches</strong>
-                <small>Made for your taste</small>
-              </span>
-            </div>
-            <div className="floating-card floating-bottom">
-              <span className="match-score">AI</span>
-              <span>
-                <strong>Recipe match</strong>
-                <small>Ranked by similarity</small>
-              </span>
-            </div>
-          </div>
-        </section>
-
-        <section className="recipes-section">
-          <div className="section-heading">
-            <div>
-              <span className="section-kicker">
-                EXPLORE SOMETHING DELICIOUS
-              </span>
-              <h2>
-                {submittedQuery
-                  ? `Results for "${submittedQuery}"`
-                  : "Discover recipes"}
-              </h2>
-              <p>
-                {submittedQuery
-                  ? "Recipes ranked by how closely they match your search."
-                  : "Search for ingredients, cuisines, or meals to get started."}
-              </p>
-            </div>
-
-            <label className="time-filter">
-              <SlidersHorizontal size={17} />
-              <select
-                value={maxTime}
-                onChange={(event) => setMaxTime(event.target.value)}
-                aria-label="Maximum cooking time"
-              >
-                <option value="Any">Any cooking time</option>
-                <option value="15">Under 15 minutes</option>
-                <option value="30">Under 30 minutes</option>
-                <option value="45">Under 45 minutes</option>
-              </select>
-            </label>
-          </div>
-
-          {loading && (
-            <div className="empty-state" role="status">
-              <span>🍳</span>
-              <h3>Finding your next favorite meal...</h3>
-              <p>Searching for recipes that match your taste.</p>
-            </div>
-          )}
-
-          {!loading && error && (
-            <div className="empty-state" role="alert">
-              <span>⚠️</span>
-              <h3>We couldn't complete your search</h3>
-              <p>{error}</p>
-              <button onClick={() => searchFor(submittedQuery || query)}>
-                Try again
-              </button>
-            </div>
-          )}
-
-          {!loading && !error && submittedQuery && filteredRecipes.length > 0 && (
-            <div className="recipe-grid">
-              {filteredRecipes.map(({ recipe, similarity }) => {
-                const totalTime =
-                  (recipe.prepTimeMinutes ?? 0) +
-                  (recipe.cookTimeMinutes ?? 0);
-                const isSaved = saved.includes(recipe.id);
-                const tags = [
-                  recipe.cuisine,
-                  recipe.dietType,
-                  recipe.mealType,
-                ].filter((tag): tag is string => Boolean(tag));
-
-                return (
-                  <article className="recipe-card" key={recipe.id}>
-                    <div
-                      className={`recipe-art recipe-art-${recipe.id % 3 + 1}`}
-                    >
-                      {recipe.imageUrl ? (
-                        <img
-                          className="recipe-image"
-                          src={recipe.imageUrl}
-                          alt={recipe.title}
-                        />
-                      ) : (
-                        <span className="recipe-emoji">
-                          {getRecipeEmoji(recipe.cuisine, recipe.mealType)}
-                        </span>
-                      )}
-
-                      <button
-                        type="button"
-                        className={`save-button ${isSaved ? "saved" : ""}`}
-                        onClick={() =>
-                          setSaved((previous) =>
-                            isSaved
-                              ? previous.filter((id) => id !== recipe.id)
-                              : [...previous, recipe.id]
-                          )
-                        }
-                        aria-label={isSaved ? "Unsave recipe" : "Save recipe"}
-                      >
-                        <Heart
-                          size={19}
-                          fill={isSaved ? "currentColor" : "none"}
-                        />
-                      </button>
-
-                      <span className="match-pill">
-                        <Sparkles size={13} />
-                        {`${Math.round(similarity * 100)}% match`}
-                      </span>
-                    </div>
-
-                    <div className="recipe-info">
-                      <div className="recipe-tags">
-                        {tags.map((tag) => (
-                          <span key={tag}>{tag}</span>
-                        ))}
-                      </div>
-
-                      <h3>{recipe.title}</h3>
-                      <p>{recipe.description}</p>
-
-                      <div className="recipe-footer">
-                        <span>
-                          <Clock size={16} />
-                          {totalTime} min
-                        </span>
-                        <span>
-                          <Leaf size={16} />
-                          {recipe.difficulty || "Not specified"}
-                        </span>
-                      </div>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          )}
-
-          {!loading &&
-            !error &&
-            submittedQuery &&
-            filteredRecipes.length === 0 && (
-              <div className="empty-state">
-                <span>🍳</span>
-                <h3>No matching recipes found</h3>
-                <p>
-                  Try another search or choose a longer cooking-time limit.
-                </p>
-                <button
-                  onClick={() => {
-                    setQuery("");
-                    setSubmittedQuery("");
-                    setMaxTime("Any");
-                  }}
-                >
-                  Clear search
-                </button>
-              </div>
-            )}
-
-          {!submittedQuery && !loading && !error && (
-            <div className="empty-state">
-              <span>🔎</span>
-              <h3>What would you like to cook?</h3>
-              <p>
-                Search for something like “high protein vegetarian dinner”
-                or “paneer with spinach”.
-              </p>
-            </div>
-          )}
-        </section>
-
-        <section className="bottom-banner" id="about">
-          <span className="banner-icon">
-            <Sparkles size={22} />
-          </span>
-          <div>
-            <h3>Not sure what to cook?</h3>
-            <p>
-              Tell us what you have in your kitchen. We’ll help you find a match.
-            </p>
-          </div>
-          <button
-            onClick={() => {
-              document.querySelector<HTMLInputElement>(".search-box input")?.focus();
-            }}
-          >
-            Explore recipes <ArrowRight size={17} />
-          </button>
-        </section>
+          {/* Protected Routes */}
+          <Route
+            path="/favorites"
+            element={
+              <ProtectedRoute>
+                <FavoritesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <ProfilePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/preferences"
+            element={
+              <ProtectedRoute>
+                <PreferencesPage />
+              </ProtectedRoute>
+            }
+          />
+        </Routes>
       </main>
 
-      <footer>
-        <a className="brand footer-brand" href="/">
-          <ChefHat size={20} /> recipemind
-        </a>
-        <span>Discover something delicious, every day.</span>
-      </footer>
+      <Footer />
     </div>
   );
 }
 
-export default App;
+/* ═══════════════════════════════════════════════
+   Navbar
+   ═══════════════════════════════════════════════ */
+
+function Navbar({
+  theme,
+  toggleTheme,
+}: {
+  theme: "light" | "dark";
+  toggleTheme: () => void;
+}) {
+  const { user, loading } = useAuth();
+  const location = useLocation();
+
+  return (
+    <header className="navbar">
+      <Link className="brand" to="/">
+        <span className="brand-icon">
+          <ChefHat size={22} />
+        </span>
+        <span>
+          recipe<span className="brand-highlight">mind</span>
+        </span>
+      </Link>
+
+      <nav>
+        <Link
+          className={location.pathname === "/" ? "nav-active" : ""}
+          to="/"
+        >
+          Discover
+        </Link>
+        <Link
+          className={location.pathname === "/find-recipes" ? "nav-active" : ""}
+          to="/find-recipes"
+        >
+          Find Recipes
+        </Link>
+        <a href="/#about">About</a>
+      </nav>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <button
+          type="button"
+          className="theme-toggle"
+          onClick={toggleTheme}
+          aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
+        >
+          {theme === "light" ? <Moon size={18} /> : <Sun size={18} />}
+        </button>
+
+        {!loading && user && <ProfileMenu />}
+      </div>
+    </header>
+  );
+}
+
+/* ── Logged-in profile dropdown ── */
+
+function ProfileMenu() {
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const email = user?.email ?? "User";
+  const initial = email.charAt(0).toUpperCase();
+
+  async function handleLogout() {
+    await signOut();
+    setOpen(false);
+    navigate("/");
+  }
+
+  return (
+    <div className="profile-area" ref={ref}>
+      <button
+        className="profile-trigger"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+      >
+        <span className="profile-avatar">{initial}</span>
+        <span>{email}</span>
+        <ChevronDown size={14} />
+      </button>
+
+      {open && (
+        <div className="profile-dropdown">
+          <div className="profile-email">{email}</div>
+          <div className="profile-dropdown-divider" />
+
+          <button
+            className="profile-dropdown-item"
+            onClick={() => {
+              navigate("/profile");
+              setOpen(false);
+            }}
+          >
+            <User size={16} /> Profile
+          </button>
+
+          <button
+            className="profile-dropdown-item"
+            onClick={() => {
+              navigate("/favorites");
+              setOpen(false);
+            }}
+          >
+            <Heart size={16} /> Favorites
+          </button>
+
+          <button
+            className="profile-dropdown-item"
+            onClick={() => {
+              navigate("/preferences");
+              setOpen(false);
+            }}
+          >
+            <SlidersHorizontal size={16} /> Preferences
+          </button>
+
+          <div className="profile-dropdown-divider" />
+
+          <button
+            className="profile-dropdown-item logout-item"
+            onClick={handleLogout}
+          >
+            <LogOut size={16} /> Logout
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════
+   Footer
+   ═══════════════════════════════════════════════ */
+
+function Footer() {
+  return (
+    <footer id="about">
+      <div className="footer-top">
+        <div className="footer-brand-col">
+          <Link className="footer-brand" to="/">
+            <ChefHat size={22} /> recipemind
+          </Link>
+          <p className="footer-desc">
+            Discover recipes that match your ingredients, cravings and lifestyle.
+            Intelligent semantic matching for every home cook.
+          </p>
+        </div>
+
+        <div className="footer-nav-groups">
+          <div className="footer-col">
+            <strong>Platform</strong>
+            <Link to="/">Discover</Link>
+            <Link to="/find-recipes">Find Recipes</Link>
+            <a href="/#recipes">Featured Dishes</a>
+          </div>
+
+          <div className="footer-col">
+            <strong>Account</strong>
+            <Link to="/sign-in">Sign In</Link>
+            <Link to="/sign-up">Get Started</Link>
+            <Link to="/favorites">My Favorites</Link>
+            <Link to="/preferences">Dietary Preferences</Link>
+          </div>
+        </div>
+      </div>
+
+      <div className="footer-bottom">
+        <span>© 2026 RecipeMind, Inc. All rights reserved.</span>
+        <span>Built with care for culinary creators.</span>
+      </div>
+    </footer>
+  );
+}
+
+/* ═══════════════════════════════════════════════
+   Root export — wraps everything with providers
+   ═══════════════════════════════════════════════ */
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <AppShell />
+      </AuthProvider>
+    </BrowserRouter>
+  );
+}
