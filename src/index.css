@@ -23,6 +23,6 @@ button:focus-visible,
 a:focus-visible,
 input:focus-visible,
 select:focus-visible {
-  outline: 2px solid #68916a;
+  outline: 2px solid var(--accent-light, #68916a);
   outline-offset: 3px;
 }
